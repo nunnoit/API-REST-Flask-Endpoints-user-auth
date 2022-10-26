@@ -8,16 +8,15 @@ class User(db.Model):
     password = db.Column(db.String(250), unique=False, nullable=False) 
     is_active = db.Column(db.Boolean(), unique=False, nullable=False)
     description = db.Column(db.String(120), unique=False, nullable=False)
-    #conectando la tabla user con las tablas pivote de planets, vehicles y people 
+    
+    # Link user table to favorites 
     user_favorite = db.relationship("Favorite_People", backref="user")
     user_favorite_planet = db.relationship("Favorite_Planets", backref="user")
     user_favorite_vehicles = db.relationship("Favorite_Vehicles", backref="user")
 
-
-    #de manera automática, el nombre de la tabla es el nombre de la clase en minúscula
+    # Table name is the class name in lowercase 
     def __repr__(self):
         return '<User %r>' % self.email
-
     def serialize(self):
         return {
             "id": self.id,
@@ -26,7 +25,7 @@ class User(db.Model):
             "descripcion": self.description
         }
 
-# Tabla Characters
+# People table
 class People(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -40,7 +39,7 @@ class People(db.Model):
     homeworld = db.Column(db.String(250))
     people_favorite = db.relationship("Favorite_People", backref="people")
 
-#Characters serialize
+# Serialize result
     def serialize(self):
         return {
             "id": self.id,
@@ -55,12 +54,11 @@ class People(db.Model):
             "homeworld": self.homeworld
         }
 
-# Tabla Pivote: Characters/ Favorites
+# Pivote Table: Characters-Favorites
 class Favorite_People(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id')) #con el nombre de la tabla user y atributo id
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     people_id = db.Column(db.Integer, db.ForeignKey('people.id'))
-    #Esta es una tabla pivote para relacionar User y Characters, relación muchos a muchos
 
     def serialize(self):
         return {
@@ -70,7 +68,7 @@ class Favorite_People(db.Model):
         }
 
 
-# Tabla Planets
+# Planets Table
 class Planets (db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -84,7 +82,7 @@ class Planets (db.Model):
     surface_Water = db.Column(db.Integer)
     planets_favorite = db.relationship("Favorite_Planets", backref="planets")
 
-    #Planets serialize
+    # Serialize result
     def serialize(self):
         return {
             "id": self.id,
@@ -99,21 +97,20 @@ class Planets (db.Model):
             "surface_Water": self.surface_Water
         }
 
-# Tabla Pivote: Planets/ Favorites    
-#Esta es una tabla pivote para relacionar User y Planets, relación muchos a muchos
+# Pivote Table: Planets-Favorites (many-to-many relation)    
 class Favorite_Planets(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id')) #con el nombre de la tabla user y atributo id
     planet_id = db.Column(db.Integer, db.ForeignKey('planets.id'))
 
-    #serialize
+    #serialize result
     def serialize(self):
         return {
             "id": self.id,
             "user_email": User.query.get(self.user_id).serialize()['email'],
             "planet_name": Planets.query.get(self.planet_id).serialize()['name'],
         }
-
+# Vehicles Table
 class Vehicles(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -129,7 +126,7 @@ class Vehicles(db.Model):
     consumables = db.Column(db.String(250))
     vehicles_favorite = db.relationship("Favorite_Vehicles", backref="vehicles")
 
-    #serialize
+    #serialize result
     def serialize(self):
         return {
             "id": self.id,
@@ -146,13 +143,13 @@ class Vehicles(db.Model):
             "consumables": self.consumables
         }
 
-# Tabla Pivote: Vehicles/ Favorites
+# Pivote Table: Vehicles-Favorites (many-to-many relation)
 class Favorite_Vehicles(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id')) #con el nombre de la tabla user y atributo id
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicles.id'))
-    #Esta es una tabla pivote para relacionar User y Vehicles, relación muchos a muchos
 
+    #serialize result
     def serialize(self):
         return {
             "id": self.id,
