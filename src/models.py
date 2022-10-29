@@ -1,6 +1,8 @@
+# Imports
+####################################
 from flask_sqlalchemy import SQLAlchemy
-
 db = SQLAlchemy()
+####################################
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -17,6 +19,7 @@ class User(db.Model):
     # Table name is the class name in lowercase 
     def __repr__(self):
         return '<User %r>' % self.email
+
     def serialize(self):
         return {
             "id": self.id,
@@ -25,7 +28,7 @@ class User(db.Model):
             "descripcion": self.description
         }
 
-# People table
+# People (Characters) Table
 class People(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -100,7 +103,7 @@ class Planets (db.Model):
 # Pivote Table: Planets-Favorites (many-to-many relation)    
 class Favorite_Planets(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id')) #con el nombre de la tabla user y atributo id
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     planet_id = db.Column(db.Integer, db.ForeignKey('planets.id'))
 
     #serialize result
@@ -155,4 +158,17 @@ class Favorite_Vehicles(db.Model):
             "id": self.id,
             "user_email": User.query.get(self.user_id).serialize()['email'],
             "vehicle_name": Vehicles.query.get(self.vehicles_id).serialize()['name']       
+        }
+
+# TokenBlockedList Table
+class TokenBlockedList(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    token= db.Column(db.String(250), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "token": self.token,
+            "created_at": self.created_at
         }

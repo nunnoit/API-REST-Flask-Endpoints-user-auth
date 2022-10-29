@@ -1,3 +1,5 @@
+# Import List
+####################################
 import os
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
@@ -5,10 +7,19 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, User, People, Favorite_People, Planets, Favorite_Planets, Vehicles, Favorite_Vehicles
+from models import db, User, People, Favorite_People, Planets, Favorite_Planets, Vehicles, Favorite_Vehicles, TokenBlockedList
+from datetime import date, time, datetime, timezone
+#Import jwt-flask-extended
+# from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity, get_jwt
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
+#Import Bcrypt
+from flask_bcrypt import Bcrypt
+####################################
 
-
-#Settings
+# App+ Settings
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_CONNECTION_STRING')
@@ -18,15 +29,74 @@ db.init_app(app)
 CORS(app)
 setup_admin(app)
 
+# Flask-JWT-Extended Settings
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
+jwt = JWTManager(app)
+
+# Bcrypt
+bcrypt = Bcrypt(app)
+
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
 def handle_invalid_usage(error):
     return jsonify(error.to_dict()), error.status_code
 
-# generate sitemap with all your endpoints
+# Generate sitemap with all your endpoints
 @app.route('/')
 def sitemap():
     return generate_sitemap(app)
+
+#Endpoint User login
+@app.route('/login', methods=['POST'])
+def login():
+    body = request.get_json()
+    email = body['email']
+    password = body['password']
+
+    user = User.query.filter_by(email=email).first()
+
+    if user is None:
+        raise APIException("Error: User does not exist", status_code=401)
+    
+    # Validate pass & check if match with user password in DB
+    if not bcrypt.check_password_hash(user.password, password):
+        raise APIException("Error: Username or password do not match", status_code=401)
+
+    access_token = create_access_token(identity= user.id)
+    return jsonify({"token": access_token})
+
+# Endpoint user Logout
+@app.route('/logout', methods=['get'])
+@jwt_required()
+def logout():
+    print(get_jwt())
+    jti=get_jwt()["jti"]
+    now = datetime.now(timezone.utc)
+
+    tokenBlocked = TokenBlockedList(token=jti, created_at=now)
+    db.session.add(tokenBlocked)
+    db.session.commit()
+
+    return jsonify({"message":"Token BlackListed"})
+
+# Endpoint suspend user
+@app.route('/ban/<int:user_id>', methods=['PUT'])
+@jwt_required()
+def user_suspended(user_id):
+    if get_jwt_identity() != 1:
+        return jsonify({"message":"Operación no permitida"}), 403
+        
+    user = User.query.get(user_id)
+   
+    # Check if name come in the body request
+    if user.is_active:
+        user.is_active = False
+        db.session.commit()   
+        return jsonify({"message":"Usuario suspendido"}), 203
+    else:
+        user.is_active = True
+        db.session.commit()   
+        return jsonify({"message":"Usuario reactivado"}), 203
 
 # Endpoint get all users
 @app.route('/user', methods=['GET'])
@@ -47,34 +117,41 @@ def create_new_user():
     body = request.get_json()
     #print(body['username'])
     descripcion = ""
+    try:
+        if body is None or "email" not in body:
+            raise APIException(
+                "Invalid: Body is empty or email does not come in the body.", status_code=400)
+        if body['email'] is None or body['email'] == "":
+            raise APIException("Error: Email is valid.", status_code=400)
+        if body['password'] is None or body['password'] == "":
+            raise APIException("Error: password is invalid", status_code=400)
+        if body['description'] is None or body['description'] == "":
+            descripcion = "Error: No description"
+        else:
+            descripcion = body['description']
 
-    if body is None or "email" not in body:
-        raise APIException(
-            "Invalid: Body is empty or email does not come in the body.", status_code=400)
-    if body['email'] is None or body['email'] == "":
-        raise APIException("Error: Email is valid.", status_code=400)
-    if body['password'] is None or body['password'] == "":
-        raise APIException("Error: password is invalid", status_code=400)
-    if body['description'] is None or body['description'] == "":
-        descripcion = "Error: No description"
-    else:
-        descripcion = body['description']
+        password = bcrypt.generate_password_hash(body['password'],10).decode("utf-8")
 
-    new_user = User(email=body['email'], password=body['password'],
-                    is_active=True, description=descripcion)
-    users = User.query.all()
-    users = list(map(lambda user: user.serialize(), users))
+        new_user = User(email=body['email'], password=password,
+                        is_active=True, description=descripcion)
+        users = User.query.all()
+        users = list(map(lambda user: user.serialize(), users))
 
-    for i in range(len(users)):
-        if (users[i]['email'] == new_user.serialize()['email']):
-            raise APIException("Error: User already exists.", status_code=400)
+        for i in range(len(users)):
+            if (users[i]['email'] == new_user.serialize()['email']):
+                raise APIException("Error: User already exists.", status_code=400)
 
-    print(new_user)
-    #print(new_user.serialize())
-    db.session.add(new_user)
-    db.session.commit()
+        print(new_user)
+        #print(new_user.serialize())
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({"mensaje": "User created successfully"}), 201
 
-    return jsonify({"mensaje": "User created successfully"}), 201
+
+    except Exception as err:
+        db.session.rollback()
+        print(err)
+        return jsonify({"mensaje": "Error registering user"}), 500
 
 # Endpoint get user by id
 @app.route('/user/<int:user_id>', methods=['GET'])
@@ -384,6 +461,31 @@ def busqueda_people():
     if found == None:
         raise APIException("Error: character does not exist", status_code=400)
     return jsonify(found), 200
+
+#Endpoint PROTECTED VIP
+@app.route('/vip', methods=['post']) 
+@jwt_required() #Restricted by token
+def hello_protected():
+    #claims = get_jwt()
+    print("User ID: ", get_jwt_identity())
+    user = User.query.get(get_jwt_identity()) # User id in the DB
+
+    #get_jwt() Returns a dictionary
+    jti=get_jwt()["jti"] 
+
+    tokenBlocked = TokenBlockedList.query.filter_by(token=jti).first()
+
+    if isinstance(tokenBlocked, TokenBlockedList):
+        return jsonify(msg="Access denied")
+
+    response_body={
+        "message":"Invalid Token",
+        "user_id": user.id, #get_jwt_identity(),
+        "user_email": user.email,
+        "description": user.description
+    }
+
+    return jsonify(response_body), 200
 
 
 # <THE END/>
