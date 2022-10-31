@@ -1,4 +1,4 @@
-# Import List
+#Import List
 ####################################
 import os
 from flask import Flask, request, jsonify, url_for
@@ -7,19 +7,20 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
+#Import DB Models
 from models import db, User, People, Favorite_People, Planets, Favorite_Planets, Vehicles, Favorite_Vehicles, TokenBlockedList
 from datetime import date, time, datetime, timezone
-#Import jwt-flask-extended
-# from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+#Import jwt-flask-extended plus ext
 from flask_jwt_extended import create_access_token
-from flask_jwt_extended import get_jwt_identity, get_jwt
+from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
+from flask_jwt_extended import get_jwt
 #Import Bcrypt
 from flask_bcrypt import Bcrypt
 ####################################
 
-# App+ Settings
+#App+ Settings
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DB_CONNECTION_STRING')
@@ -29,19 +30,19 @@ db.init_app(app)
 CORS(app)
 setup_admin(app)
 
-# Flask-JWT-Extended Settings
+#Flask-JWT-Extended Settings
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
 jwt = JWTManager(app)
 
-# Bcrypt
+#Bcrypt
 bcrypt = Bcrypt(app)
 
-# Handle/serialize errors like a JSON object
+#Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
 def handle_invalid_usage(error):
     return jsonify(error.to_dict()), error.status_code
 
-# Generate sitemap with all your endpoints
+#Generate sitemap with all Endpoints
 @app.route('/')
 def sitemap():
     return generate_sitemap(app)
@@ -74,17 +75,17 @@ def logout():
     now = datetime.now(timezone.utc)
 
     tokenBlocked = TokenBlockedList(token=jti, created_at=now)
-    db.session.add(tokenBlocked)
+    db.session.add(tokenBlocked) #Add token to db to be blacklisted
     db.session.commit()
 
-    return jsonify({"message":"Token BlackListed"})
+    return jsonify({"message":"The user has successfully logged out."})
 
 # Endpoint suspend user
 @app.route('/ban/<int:user_id>', methods=['PUT'])
 @jwt_required()
 def user_suspended(user_id):
     if get_jwt_identity() != 1:
-        return jsonify({"message":"Operación no permitida"}), 403
+        return jsonify({"message":"Operation not allowed"}), 403
         
     user = User.query.get(user_id)
    
@@ -92,11 +93,11 @@ def user_suspended(user_id):
     if user.is_active:
         user.is_active = False
         db.session.commit()   
-        return jsonify({"message":"Usuario suspendido"}), 203
+        return jsonify({"message":"User suspended"}), 203
     else:
         user.is_active = True
         db.session.commit()   
-        return jsonify({"message":"Usuario reactivado"}), 203
+        return jsonify({"message":"User is Active"}), 203
 
 # Endpoint get all users
 @app.route('/user', methods=['GET'])
@@ -105,10 +106,6 @@ def handle_hello():
     #print(users)
     # (user)=>user.serialize()
     users = list(map(lambda user: user.serialize(), users))
-    #print(users)
-    response_body = {
-        "msg": "Hello, this is your GET /user response "
-    }
     return jsonify(users), 200
 
 # Endpoint post user
@@ -397,7 +394,7 @@ def delete_favorite_vehicle_by_id(item_id):
 def put_people_by_id(people_id):
     if people_id == 0:
         raise APIException("Error: id cannot be equal to 0", status_code=400)
-    person = People.query.get(people_id)  # Search by id
+    person = People.query.get(people_id)  
     if person == None:
         raise APIException("Error: Username does not exist", status_code=400)
     body = request.get_json()
@@ -415,7 +412,7 @@ def put_people_by_id(people_id):
 def put_planet_by_id(planet_id):
     if planet_id == 0:
         raise APIException("Error: id cannot be equal to 0", status_code=400)
-    planet = Planets.query.get(planet_id)  # Search by id
+    planet = Planets.query.get(planet_id)  
     if planet == None:
         raise APIException("Error: the planet does not exist", status_code=400)
     body = request.get_json()
@@ -462,9 +459,9 @@ def busqueda_people():
         raise APIException("Error: character does not exist", status_code=400)
     return jsonify(found), 200
 
-#Endpoint PROTECTED VIP
+#Endpoint VIP Area (protected by user Token)
 @app.route('/vip', methods=['post']) 
-@jwt_required() #Restricted by token
+@jwt_required() # <--- Restricted by token
 def hello_protected():
     #claims = get_jwt()
     print("User ID: ", get_jwt_identity())
@@ -479,8 +476,8 @@ def hello_protected():
         return jsonify(msg="Access denied")
 
     response_body={
-        "message":"Invalid Token",
-        "user_id": user.id, #get_jwt_identity(),
+        "message":"Token is valid :)",
+        "user_id": user.id,
         "user_email": user.email,
         "description": user.description
     }
